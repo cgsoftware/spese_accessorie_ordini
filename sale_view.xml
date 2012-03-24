@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+    	<record model="ir.ui.view" id="view_order_form_accessori">
+                <field name="name">sale.order.form_accessori</field>
+                <field name="model">sale.order</field>
+                <field name="type">form</field>
+                <field name="inherit_id" ref="sale.view_order_form"/>
+                <field name="arch" type="xml">
+                	
+                        <field name="payment_term" position="replace">
+                        	<field name="payment_term" widget="selection"/>	
+                        	<field name="spese_imballo"/>
+                        	<!-- <field name="spese_incasso"/>  -->
+                        	
+                        	
+                    	</field>
+
+                </field>
+        </record>
+    </data>
+</openerp>
