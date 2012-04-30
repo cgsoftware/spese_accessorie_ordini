@@ -11,6 +11,8 @@
                         <field name="payment_term" position="replace">
                         	<field name="payment_term" widget="selection"/>	
                         	<field name="spese_imballo"/>
+                        	<field name="sconto_partner"/>
+                        	
                         	<!-- <field name="spese_incasso"/>  -->
                         	
                         	

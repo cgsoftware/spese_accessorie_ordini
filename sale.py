@@ -18,7 +18,44 @@ class sale_order(osv.osv):
         #for line in self.pool.get('sale.order.line').browse(cr, uid, ids, context=context):
         #    result[line.order_id.id] = True
         #return result.keys()
-        return super(sale_order,self)._get_order(cr,uid,context)    
+        return super(sale_order,self)._get_order(cr,uid,context)   
+    
+    
+    def _amount_line_tax(self, cr, uid, line, context=None):
+        val = super(sale_order,self)._amount_line_tax(cr, uid, line, context)
+        
+        val1 = 0
+        tot_netto = 0
+        #import pdb;pdb.set_trace()
+        order = self.browse(cr, uid, line.order_id.id, context=context)
+        if order._columns.get('sconto_partner',False):
+                if order.order_line:
+                    for line in order.order_line:
+                        netto = line.price_subtotal
+                        netto = netto-(netto*order.sconto_partner/100)
+                        tot_netto += netto
+                        
+        
+       
+        line.product_uom_qty = 1
+        for c in self.pool.get('account.tax').compute_all(cr, uid, line.tax_id, netto * (1 - (line.discount or 0.0) / 100.0), line.product_uom_qty, line.order_id.partner_invoice_id.id, line.product_id, line.order_id.partner_id)['taxes']:
+            val1 += c.get('amount', 0.0)
+        valconai = 0.0
+        #import pdb;pdb.set_trace()
+        # fa il calcolo delle tassa applicate al conai in modo che compaiano nel totale 
+        for c in self.pool.get('account.tax').compute_all(cr, uid, line.tax_id, line.totale_conai, 1, line.order_id.partner_invoice_id.id, line.product_id, line.order_id.partner_id)['taxes']:
+            valconai += c.get('amount', 0.0)
+        return val1 + valconai
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
     
     
     def _amount_all(self, cr, uid, ids, field_name, arg, context=None):
@@ -29,8 +66,30 @@ class sale_order(osv.osv):
         tassa_inc = 0
         tassa_tra = 0
         tassa_imb = 0
+        iva = 0
+        tot_merce = 0
+        tot_netto = 0
+        conai = 0
+        for order in self.browse(cr, uid, ids, context=context):
+            if order.order_line:
+                for line in order.order_line:
+                    conai += line.totale_conai
+                    if order._columns.get('sconto_partner',False):
+                
+                        netto = line.price_subtotal
+                        netto = netto-(netto*order.sconto_partner/100)
+                        tot_netto += netto
+                        iva += self._amount_line_tax(cr, uid, line, context=context)
+                        
+                        
+        if tot_netto == 0:
+            tot_netto = res[order.id]['amount_untaxed']
+            iva = res[order.id]['amount_tax']
         
-        
+        res[order.id] = {
+                         'amount_untaxed':tot_netto,
+                         'amount_tax':  iva,
+                         'amount_total': tot_netto + iva + conai,}
         
         
         
@@ -53,11 +112,11 @@ class sale_order(osv.osv):
                 if codici_iva_accessori['civa_spe_inc'][0] or codici_iva_accessori['civa_spe_tra'] or codici_iva_accessori['civa_spe_imb'] or esenzione:
                     
                     if esenzione:
-                        imponibile = res[order.id]['amount_untaxed']+ order.spese_incasso + order.spese_di_trasporto +order.spese_imballo, 
+                        imponibile = tot_netto + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo, 
                         res[order.id] = {'spese_incasso':order.spese_incasso,
-                                         'amount_untaxed':res[order.id]['amount_untaxed'], 
-                                         'amount_tax': res[order.id]['amount_tax'],
-                                         'amount_total': res[order.id]['amount_total'] + order.spese_incasso + order.spese_di_trasporto + order.spese_imballo,}
+                                         'amount_untaxed': tot_netto,#res[order.id]['amount_untaxed'], 
+                                         'amount_tax': iva,
+                                         'amount_total': conai + tot_netto + iva + order.spese_incasso + order.spese_di_trasporto + order.spese_imballo,}
                     else:
                         
                         if order.spese_incasso:
@@ -67,20 +126,23 @@ class sale_order(osv.osv):
                         if order.spese_imballo:
                             tassa_imb = order.spese_imballo * tax_imb['amount']
                         #import pdb;pdb.set_trace()
-                        imponibile = res[order.id]['amount_untaxed']+ order.spese_incasso + order.spese_di_trasporto +order.spese_imballo,
+                        imponibile = tot_netto + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo,
                         res[order.id] = {
-                                         'amount_untaxed':res[order.id]['amount_untaxed'],
-                                         'amount_tax':  res[order.id]['amount_tax'] + tassa_inc + tassa_tra + tassa_imb,
-                                         'amount_total': res[order.id]['amount_total'] + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo +tassa_inc + tassa_tra + tassa_imb,
+                                         'amount_untaxed':tot_netto, #res[order.id]['amount_untaxed'],
+                                         'amount_tax':  iva + tassa_inc + tassa_tra + tassa_imb,
+                                         'amount_total': conai + tot_netto + iva + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo +tassa_inc + tassa_tra + tassa_imb,
                                          'spese_incasso':order.spese_incasso,
                                          }               
         return res    
     
     
-    _columns = {
+    _columns = {'sconto_partner':fields.float('Sconto Partner', digits=(9, 3)),
+                'str_sconto_partner':fields.char('Sconto', size=20),
+            
                 'spese_incasso':fields.float('Spese Incasso', digits_compute=dp.get_precision('Account')),
                 'spese_imballo':fields.float('Spese Imballo', digits_compute=dp.get_precision('Account')),
                 'amount_untaxed': fields.function(_amount_all, method=True, digits_compute=dp.get_precision('Sale Price'), string='Untaxed Amount',
+                
                 store={
                 'sale.order': (lambda self, cr, uid, ids, c={}: ids, ['order_line'], 10),
                 'sale.order.line': (_get_order, ['price_unit', 'tax_id', 'discount', 'product_uom_qty'], 10),
@@ -111,9 +173,19 @@ class sale_order(osv.osv):
                 v['spese_incasso'] = spese
 
             return spese
-    
+        
+    def onchange_partner_id(self, cr, uid, ids, part):
+        res = super(sale_order,self).onchange_partner_id(cr, uid, ids, part)
+        val = res.get('value', False)
+        if part: 
+             part = self.pool.get('res.partner').browse(cr, uid, part)
+             if part.str_sconto_partner: #IL PARTNER HA UNA STRINGA DI SCONTO
+                 val['str_sconto_partner']=part.str_sconto_partner
+             if part.sconto_partner: #IL PARTNER HA UNA PERCENTUALE DI SCONTO NUMERICA
+                 val['sconto_partner']=part.sconto_partner
+                 
+        return {'value': val}
     
 
-                                 
     
 sale_order()
