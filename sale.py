@@ -21,31 +21,31 @@ class sale_order(osv.osv):
         return super(sale_order,self)._get_order(cr,uid,context)   
     
     
-    def _amount_line_tax(self, cr, uid, line, context=None):
-        val = super(sale_order,self)._amount_line_tax(cr, uid, line, context)
-        
-        val1 = 0
-        tot_netto = 0
-        #import pdb;pdb.set_trace()
-        order = self.browse(cr, uid, line.order_id.id, context=context)
-        if order._columns.get('sconto_partner',False):
-                if order.order_line:
-                    for line in order.order_line:
-                        netto = line.price_subtotal
-                        netto = netto-(netto*order.sconto_partner/100)
-                        tot_netto += netto
-                        
-        
-       
-        line.product_uom_qty = 1
-        for c in self.pool.get('account.tax').compute_all(cr, uid, line.tax_id, netto * (1 - (line.discount or 0.0) / 100.0), line.product_uom_qty, line.order_id.partner_invoice_id.id, line.product_id, line.order_id.partner_id)['taxes']:
-            val1 += c.get('amount', 0.0)
-        valconai = 0.0
-        #import pdb;pdb.set_trace()
-        # fa il calcolo delle tassa applicate al conai in modo che compaiano nel totale 
-        for c in self.pool.get('account.tax').compute_all(cr, uid, line.tax_id, line.totale_conai, 1, line.order_id.partner_invoice_id.id, line.product_id, line.order_id.partner_id)['taxes']:
-            valconai += c.get('amount', 0.0)
-        return val1 + valconai
+#    def _amount_line_tax(self, cr, uid, line, context=None):
+#        val = super(sale_order,self)._amount_line_tax(cr, uid, line, context)
+#        
+#        val1 = val
+#        tot_netto = 0
+#        import pdb;pdb.set_trace()
+#        order = self.browse(cr, uid, line.order_id.id, context=context)
+#        if order._columns.get('sconto_partner',False):
+#                if order.order_line:
+#                    for line in order.order_line:
+#                        netto = line.price_subtotal
+#                        netto = netto-(netto*order.sconto_partner/100)
+#                        tot_netto += netto
+#                        
+#        
+#       
+#        line.product_uom_qty = 1
+#        for c in self.pool.get('account.tax').compute_all(cr, uid, line.tax_id, netto * (1 - (line.discount or 0.0) / 100.0), line.product_uom_qty, line.order_id.partner_invoice_id.id, line.product_id, line.order_id.partner_id)['taxes']:
+#            val1 += c.get('amount', 0.0)
+#        valconai = 0.0
+#        #
+#        # fa il calcolo delle tassa applicate al conai in modo che compaiano nel totale 
+#        for c in self.pool.get('account.tax').compute_all(cr, uid, line.tax_id, line.totale_conai, 1, line.order_id.partner_invoice_id.id, line.product_id, line.order_id.partner_id)['taxes']:
+#            valconai += c.get('amount', 0.0)
+#        return val1 + valconai 
     
     
     
@@ -59,7 +59,7 @@ class sale_order(osv.osv):
     
     
     def _amount_all(self, cr, uid, ids, field_name, arg, context=None):
-        #import pdb;pdb.set_trace()
+        #
         res = super(sale_order, self)._amount_all(cr, uid, ids, field_name, arg, context=None)
         company_id = self.pool.get('res.users').browse(cr, uid, uid, context).company_id.id
         codici_iva_accessori = self.pool.get('res.company').read(cr, uid, company_id , (['civa_spe_inc', 'civa_spe_imb', 'civa_spe_tra', 'civa_fc']), context=context)
@@ -74,12 +74,15 @@ class sale_order(osv.osv):
             if order.order_line:
                 for line in order.order_line:
                     conai += line.totale_conai
+                    #import pdb;pdb.set_trace()
+                    iva += self._amount_line_tax(cr, uid, line, context=context)
                     if order._columns.get('sconto_partner',False):
                 
                         netto = line.price_subtotal
                         netto = netto-(netto*order.sconto_partner/100)
                         tot_netto += netto
-                        iva += self._amount_line_tax(cr, uid, line, context=context)
+                        
+                        
                         
                         
         if tot_netto == 0:
