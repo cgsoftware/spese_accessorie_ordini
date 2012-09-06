@@ -9,7 +9,8 @@
                 <field name="arch" type="xml">
                 	
                         <field name="payment_term" position="replace">
-                        	<field name="payment_term" widget="selection"/>	
+                        	<field name="payment_term" widget="selection" on_change="calcola_spese_inc_ord(payment_term, context)"/>	
+                        	<field name="spese_incasso"/> 
                         	<field name="spese_imballo"/>
                         	<field name="sconto_partner"/>
                         	

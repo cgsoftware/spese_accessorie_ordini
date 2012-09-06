@@ -67,13 +67,12 @@ class sale_order(osv.osv):
         tassa_tra = 0
         tassa_imb = 0
         iva = 0
-        tot_merce = 0
         tot_netto = 0
         conai = 0
         for order in self.browse(cr, uid, ids, context=context):
             if order.order_line:
                 for line in order.order_line:
-                    conai += line.totale_conai
+                    #conai += line.totale_conai
                     #import pdb;pdb.set_trace()
                     iva += self._amount_line_tax(cr, uid, line, context=context)
                     if order._columns.get('sconto_partner',False):
@@ -106,32 +105,41 @@ class sale_order(osv.osv):
             tax_inc=self.pool.get('account.tax').read(cr, uid, codici_iva_accessori['civa_spe_inc'][0], (['amount', 'type']))
             tax_tra=self.pool.get('account.tax').read(cr, uid, codici_iva_accessori['civa_spe_tra'][0], (['amount', 'type']))
             tax_imb=self.pool.get('account.tax').read(cr, uid, codici_iva_accessori['civa_spe_imb'][0], (['amount', 'type']))
-            imponibile = 0
-            if order.payment_term:
-                pagamento_id = order.payment_term.id
-                order.spese_incasso = self.calcola_spese_inc_ord(cr, uid, ids, pagamento_id)
+            #imponibile = 0
+            #import pdb;pdb.set_trace()
+            if order.spese_incasso:
+                pass
+            else:
+                if order.payment_term:
+                    #pagamento_id = order.payment_term.id
+                    #order.spese_incasso = self.calcola_spese_inc_ord(cr, uid, ids, pagamento_id, context)
+                #order.spese_incasso= order.spese_incasso['value']['spese_incasso']
+                #import pdb;pdb.set_trace()
+                    pass
+                else:
+                    order.spese_incasso = 0.0
             if order.spese_incasso or order.spese_di_trasporto or order.spese_imballo or esenzione:
                
                 if codici_iva_accessori['civa_spe_inc'][0] or codici_iva_accessori['civa_spe_tra'] or codici_iva_accessori['civa_spe_imb'] or esenzione:
                     
                     if esenzione:
-                        imponibile = tot_netto + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo, 
+                        #imponibile = tot_netto + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo, 
                         res[order.id] = {'spese_incasso':order.spese_incasso,
                                          'amount_untaxed': tot_netto,#res[order.id]['amount_untaxed'], 
                                          'amount_tax': iva,
                                          'amount_total': conai + tot_netto + iva + order.spese_incasso + order.spese_di_trasporto + order.spese_imballo,}
                     else:
-                        
-                        if order.spese_incasso:
+                        #import pdb;pdb.set_trace() 
+                        if order.spese_incasso > 0:
                             tassa_inc = order.spese_incasso * tax_inc['amount']
-                        if order.spese_di_trasporto:
+                        if order.spese_di_trasporto > 0 :
                             tassa_tra = order.spese_di_trasporto *tax_tra['amount']
-                        if order.spese_imballo:
+                        if order.spese_imballo > 0:
                             tassa_imb = order.spese_imballo * tax_imb['amount']
                         #import pdb;pdb.set_trace()
-                        imponibile = tot_netto + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo,
+                        #imponibile = tot_netto + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo,
                         res[order.id] = {
-                                         'amount_untaxed':tot_netto, #res[order.id]['amount_untaxed'],
+                                         'amount_untaxed':tot_netto+ order.spese_incasso + order.spese_di_trasporto +order.spese_imballo , #res[order.id]['amount_untaxed'],
                                          'amount_tax':  iva + tassa_inc + tassa_tra + tassa_imb,
                                          'amount_total': conai + tot_netto + iva + order.spese_incasso + order.spese_di_trasporto +order.spese_imballo +tassa_inc + tassa_tra + tassa_imb,
                                          'spese_incasso':order.spese_incasso,
@@ -165,27 +173,39 @@ class sale_order(osv.osv):
             multi='sums', help="The total amount."),
                 }
     
-    def calcola_spese_inc_ord(self, cr, uid, ids, pagamento_id):
-            #import pdb;pdb.set_trace()
-            v = {}
+    def calcola_spese_inc_ord(self, cr, uid, ids, pagamento_id, context):
+            val = {}
             if pagamento_id:
                 lines = self.pool.get('account.payment.term.line').search(cr, uid, [('payment_id', "=", pagamento_id)])
                 spese = 0
+                #import pdb;pdb.set_trace()
+
                 for riga in self.pool.get('account.payment.term.line').browse(cr, uid, lines):
                     spese = spese + riga['costo_scadenza']
-                v['spese_incasso'] = spese
+                val['spese_incasso'] = spese
 
-            return spese
+            return  val['spese_incasso']
         
     def onchange_partner_id(self, cr, uid, ids, part):
         res = super(sale_order,self).onchange_partner_id(cr, uid, ids, part)
         val = res.get('value', False)
+        
         if part: 
-             part = self.pool.get('res.partner').browse(cr, uid, part)
-             if part.str_sconto_partner: #IL PARTNER HA UNA STRINGA DI SCONTO
-                 val['str_sconto_partner']=part.str_sconto_partner
-             if part.sconto_partner: #IL PARTNER HA UNA PERCENTUALE DI SCONTO NUMERICA
-                 val['sconto_partner']=part.sconto_partner
+            part = self.pool.get('res.partner').browse(cr, uid, part)
+            if part.str_sconto_partner: #IL PARTNER HA UNA STRINGA DI SCONTO
+                val['str_sconto_partner']=part.str_sconto_partner
+            if part.sconto_partner: #IL PARTNER HA UNA PERCENTUALE DI SCONTO NUMERICA
+                val['sconto_partner']=part.sconto_partner
+            if val['payment_term']:
+                pagamento_id = val['payment_term']
+                context= False
+                spese =self.calcola_spese_inc_ord(cr, uid, ids, pagamento_id, context)
+                #import pdb;pdb.set_trace()
+                val['spese_incasso']=spese #['value']['spese_incasso']
+                 
+                #spe['spese_incasso']= spese['spese_incasso']['value']
+
+        
                  
         return {'value': val}
     
